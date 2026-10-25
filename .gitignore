@@ -1,5 +1,4 @@
 /.prohubenv/
-/env/
 *.env
-.env.*
 __pycache__/
+!.env.example

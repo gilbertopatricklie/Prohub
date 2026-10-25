@@ -19,30 +19,57 @@ def get_all_product(db: Session = Depends(get_db)):
     return result
 
 #yang ini response_model = ProductResponse karna yang direturn satu item saja (pencarian by id)
-# @router.get("/{product_id}", response_model= ProductResponse)
-# def get_product_by_id(product_id: int):
-#     for product in products:
-#         if product["id"] == product_id:
-#             return product
+@router.get("/{product_id}", response_model= ProductResponse)
+def get_product_by_id(product_id: int, db: Session = Depends(get_db)):
+    statement = select(Product).where(Product.id == product_id)
+    product = db.scalars(statement).first()
+    
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product id not found/exist")
+    
+    return product
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def create_product(payload: ProductCreation, db: Session = Depends(get_db)):
+    new_product = Product(
+        name = payload.name,
+        price = payload.price,
+        stock = payload.stock
+    )
+    
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+    
+    return new_product
+
+@router.patch("/{product_id}", response_model=ProductResponse)
+def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db)):
+    statement = select(Product).where(Product.id == product_id)
+    product = db.scalars(statement).first()
+    
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product id not found/exist")
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    for field, value in update_data.items():
+        setattr(product, field, value)
         
-#     raise HTTPException(status_code=404, detail="Product id not found.")
-
-# @router.post("/", status_code=status.HTTP_201_CREATED)
-# def create_product(product: ProductCreation):
-#     new_product= product.model_dump()
-#     new_product["id"] = max(
-#         (item["id"] for item in products),
-#         default=0
-#     ) + 1
+    db.commit()
+    db.refresh(product)
     
-#     products.append(new_product)
-    
-#     return new_product
+    return product
 
-# @router.patch("/{product_id}", response_model=ProductResponse)
-# def update_product_by_id(product_id: int, payload: ProductUpdate):
-#     for product in products:
-#         if product["id"] == product_id:
-#             update_data = payload.model_dump(exclude_unset=True)
-#             product.update(update_data)
-#             return product
+@router.delete("/{product_id}", status_code= status.HTTP_204_NO_CONTENT)
+def delete_product_by_id(product_id: int, db: Session = Depends(get_db)):
+    statement = select(Product).where(Product.id == product_id)
+    product = db.scalars(statement).first()
+    
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product id not found/exist")
+    
+    db.delete(product)
+    db.commit()
+    
+    return None
