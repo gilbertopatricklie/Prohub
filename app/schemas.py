@@ -1,5 +1,8 @@
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, EmailStr
 from decimal import Decimal
+from datetime import datetime
+
+#====================PRODUCT========================#
 
 class ProductCreation(BaseModel):
     name: str = Field(min_length=1, max_length=100)
@@ -28,3 +31,19 @@ class ProductResponse(BaseModel):
     name: str
     price: Decimal
     stock: int
+    
+    
+#====================USERS========================#
+class UserCreation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=100)
+    
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    email: EmailStr
+    is_active: bool
+    created_at: datetime
