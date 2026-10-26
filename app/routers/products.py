@@ -3,7 +3,8 @@ from app.schemas import ProductCreation, ProductResponse, ProductUpdate
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Product
+from app.models import Product, User
+from app.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/products",
@@ -30,7 +31,7 @@ def get_product_by_id(product_id: int, db: Session = Depends(get_db)):
     return product
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_product(payload: ProductCreation, db: Session = Depends(get_db)):
+def create_product(payload: ProductCreation, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     new_product = Product(
         name = payload.name,
         price = payload.price,
@@ -44,7 +45,7 @@ def create_product(payload: ProductCreation, db: Session = Depends(get_db)):
     return new_product
 
 @router.patch("/{product_id}", response_model=ProductResponse)
-def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db)):
+def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     statement = select(Product).where(Product.id == product_id)
     product = db.scalars(statement).first()
     
@@ -62,7 +63,7 @@ def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = 
     return product
 
 @router.delete("/{product_id}", status_code= status.HTTP_204_NO_CONTENT)
-def delete_product_by_id(product_id: int, db: Session = Depends(get_db)):
+def delete_product_by_id(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     statement = select(Product).where(Product.id == product_id)
     product = db.scalars(statement).first()
     
