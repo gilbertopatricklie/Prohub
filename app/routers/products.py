@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Product, User
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 
 router = APIRouter(
     prefix="/products",
@@ -31,7 +31,7 @@ def get_product_by_id(product_id: int, db: Session = Depends(get_db)):
     return product
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_product(payload: ProductCreation, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_product(payload: ProductCreation, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     new_product = Product(
         name = payload.name,
         price = payload.price,
@@ -45,7 +45,7 @@ def create_product(payload: ProductCreation, db: Session = Depends(get_db), curr
     return new_product
 
 @router.patch("/{product_id}", response_model=ProductResponse)
-def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     statement = select(Product).where(Product.id == product_id)
     product = db.scalars(statement).first()
     
@@ -63,7 +63,7 @@ def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = 
     return product
 
 @router.delete("/{product_id}", status_code= status.HTTP_204_NO_CONTENT)
-def delete_product_by_id(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_product_by_id(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     statement = select(Product).where(Product.id == product_id)
     product = db.scalars(statement).first()
     
