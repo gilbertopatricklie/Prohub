@@ -23,7 +23,7 @@ def client_as_user():
     with TestClient(app) as client:
         yield client
         
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_current_user, None)
     
 def user_post_product(client_as_user):
     response = client_as_user.post("/products/",
