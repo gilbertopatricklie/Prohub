@@ -2,7 +2,7 @@ import jwt
 
 from app.security import hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
-def test_password_hasing():
+def test_password_hashing():
     password = "password-secret"
     
     hashed_password = hash_password(password)
