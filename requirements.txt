@@ -5,6 +5,7 @@ annotated-types==0.8.0
 anyio==4.15.1
 argon2-cffi==25.1.0
 argon2-cffi-bindings==26.1.0
+async-timeout==5.0.1
 certifi==2026.10.19
 cffi==2.1.1
 charset-normalizer==3.5.2
@@ -56,6 +57,7 @@ pytest==9.2.0
 python-dotenv==1.2.4
 python-multipart==0.0.32
 PyYAML==6.0.3
+redis==6.4.0
 requests==2.34.2
 rich==15.0.0
 rich-toolkit==0.20.6
