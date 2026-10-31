@@ -2,6 +2,8 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from app.main import app
 from app.dependencies import get_current_user, require_admin
+from app.models import Product
+from app.redis_client import delete_cache
 
 def create_fake_admin():
     return SimpleNamespace(
@@ -112,3 +114,42 @@ def test_delete_product(admin_client: TestClient):
     
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(require_admin, None)
+    
+def test_get_all_products_pagination(admin_client: TestClient, db_session):
+    
+    delete_cache(
+        "products:skip:0:limit:5",
+        "products:skip:5:limit:5",
+    )
+
+    for i in range(1, 16):
+        product = Product(
+            name=f"Product {i}",
+            price=1000 * i,
+            stock=i,
+        )
+        db_session.add(product)
+
+    db_session.commit()
+
+    response = admin_client.get("/products/?skip=0&limit=5")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 5
+
+    response = admin_client.get("/products/?skip=5&limit=5")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 5
+
+    first_page = admin_client.get("/products/?skip=0&limit=5").json()
+    second_page = admin_client.get("/products/?skip=5&limit=5").json()
+    first_page_ids = {product["id"] for product in first_page}
+    second_page_ids = {product["id"] for product in second_page}
+
+    assert first_page_ids.isdisjoint(second_page_ids)
+
+    delete_cache(
+        "products:skip:0:limit:5",
+        "products:skip:5:limit:5",
+    )

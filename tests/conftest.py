@@ -47,23 +47,9 @@ def setup_test_database():
     test_engine.dispose()
 
 @pytest.fixture
-def client():
-    connection = test_engine.connect()
-    transaction = connection.begin()
-
-    TestSessionLocal = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        join_transaction_mode="create_savepoint",
-    )
-
+def client(db_session):
     def override_get_db():
-        db = TestSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -71,9 +57,7 @@ def client():
         with TestClient(app) as test_client:
             yield test_client
     finally:
-        app.dependency_overrides.pop(get_db, None)
-        transaction.rollback()
-        connection.close()
+        app.dependency_overrides.pop(get_db, None)  
     
 @pytest.fixture
 def admin_client(client):
@@ -89,3 +73,24 @@ def admin_client(client):
     yield client
     
     app.dependency_overrides.pop(get_current_user, None)
+    
+@pytest.fixture
+def db_session():
+    connection = test_engine.connect()
+    transaction = connection.begin()
+
+    TestSessionLocal = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+    db = TestSessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
+        transaction.rollback()
+        connection.close()

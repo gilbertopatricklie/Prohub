@@ -113,11 +113,11 @@ def test_get_products_cache_miss(admin_client, monkeypatch):
     products = response.json()
     
     assert any(product["name"] == "Database Product" for product in products)
-    assert "products:all" in saved_cache
+    assert "products:skip:0:limit:10" in saved_cache
     
-    cached_products = json.loads(saved_cache["products:all"]["value"])
+    cached_products = json.loads(saved_cache["products:skip:0:limit:10"]["value"])
     assert any(product["name"] == "Database Product" for product in cached_products)
-    assert saved_cache["products:all"]["ttl"] == 120
+    assert saved_cache["products:skip:0:limit:10"]["ttl"] == 120
     
 def test_update_product_invalidates_cache(admin_client, monkeypatch):
     create_response = admin_client.post(

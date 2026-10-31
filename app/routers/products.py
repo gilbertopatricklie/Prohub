@@ -1,7 +1,7 @@
 import json
 
 from app.redis_client import get_cache, set_cache, delete_cache
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, status, HTTPException, Depends, Query
 from app.schemas import ProductCreation, ProductResponse, ProductUpdate
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,15 +16,15 @@ router = APIRouter(
 
 #yang ini response_model = list[ProductResponse] karna yang direturn itu list (banyak item produk)
 @router.get("/", response_model= list[ProductResponse])
-def get_all_product(db: Session = Depends(get_db)):
-    cache_key = "products:all"
+def get_all_product(db: Session = Depends(get_db), skip: int = Query(default=0, ge=0), limit: int = Query(default=10, ge=1, le=100)):
+    cache_key = f"products:skip:{skip}:limit:{limit}"
     cached_products = get_cache(cache_key)
     
     #kalo ada cachenya pake dari redis
     if cached_products:
         return json.loads(cached_products)
     #kalo ga ada di cache, ambil dari database
-    statement = select(Product)
+    statement = select(Product).order_by(Product.id).offset(skip).limit(limit)
     products = db.scalars(statement).all()
     
     products_data = [
