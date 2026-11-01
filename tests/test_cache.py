@@ -38,7 +38,9 @@ def test_set_cache_fail(monkeypatch):
     
     monkeypatch.setattr(redis_client, "set", mock_set)
     
-    set_cache("products:all", "test-data", 120)
+    result = set_cache("products:all", "test-data", 120)
+    
+    assert result is None
     
 def test_delete_cache_success(monkeypatch):
     calls = []
@@ -58,7 +60,10 @@ def test_delete_cache_fail(monkeypatch):
     
     monkeypatch.setattr(redis_client, "delete", mock_delete)
     
-    delete_cache("products:all")
+    result = delete_cache("products:all")
+    
+    assert result is None
+    
     
 def test_products_cache_hit(admin_client, monkeypatch):
     cached_data = [
@@ -83,7 +88,7 @@ def test_products_cache_hit(admin_client, monkeypatch):
     assert response.json() == cached_data
     
 def test_get_products_cache_miss(admin_client, monkeypatch):
-    cache_key = "products:skip:0:limit:10:sort:id:order:asc:"
+    cache_key = "products:skip:0:limit:10:sort:id:order:asc:search:"
     
     create_response = admin_client.post(
         "/products/",
@@ -173,3 +178,58 @@ def test_delete_product_invalidates_cache(admin_client, monkeypatch):
     response = admin_client.delete(f"/products/{product_id}")
     assert response.status_code == 204
     assert "products:*" in deleted_pattern
+    
+def test_delete_cache_pattern_success(monkeypatch):
+    deleted_pattern = []
+
+    def mock_scan_iter(match):
+        assert match == "products:*"
+        return ["products:1", "products:2", "products:skip:0"]
+
+    def mock_delete(key):
+        deleted_pattern.append(key)
+
+    monkeypatch.setattr(redis_client, "scan_iter", mock_scan_iter)
+    monkeypatch.setattr(redis_client, "delete", mock_delete)
+
+    delete_cache_pattern("products:*")
+
+    assert deleted_pattern == [
+        "products:1",
+        "products:2",
+        "products:skip:0",
+    ]
+    
+def test_delete_cache_pattern_no_keys(monkeypatch):
+    deleted_pattern = []
+
+    monkeypatch.setattr(redis_client,"scan_iter",lambda match: [])
+    monkeypatch.setattr(redis_client,"delete",lambda key: deleted_pattern.append(key))
+
+    delete_cache_pattern("products:*")
+
+    assert deleted_pattern == []
+    
+def test_delete_cache_pattern_scan_fail(monkeypatch):
+    def mock_scan_iter(match):
+        raise redis.exceptions.ConnectionError("Redis unavailable")
+
+    monkeypatch.setattr(redis_client, "scan_iter", mock_scan_iter)
+
+    result = delete_cache_pattern("products:*")
+
+    assert result is None
+    
+def test_delete_cache_pattern_delete_fail(monkeypatch):
+    def mock_scan_iter(match):
+        return ["products:1"]
+
+    def mock_delete(key):
+        raise redis.exceptions.ConnectionError("Redis unavailable")
+
+    monkeypatch.setattr(redis_client, "scan_iter", mock_scan_iter)
+    monkeypatch.setattr(redis_client, "delete", mock_delete)
+
+    result = delete_cache_pattern("products:*")
+
+    assert result is None

@@ -116,7 +116,7 @@ def test_delete_product(admin_client: TestClient):
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(require_admin, None)
     
-def test_get_all_products_pagination(admin_client: TestClient, db_session):
+def test_get_all_product_pagination(admin_client: TestClient, db_session):
     
     delete_cache(
         "products:skip:0:limit:5",
@@ -155,7 +155,7 @@ def test_get_all_products_pagination(admin_client: TestClient, db_session):
         "products:skip:5:limit:5",
     )
     
-def test_get_products_sorting(admin_client, db_session, monkeypatch):
+def test_get_all_product_sorting(admin_client, db_session, monkeypatch):
     monkeypatch.setattr(product_route, "get_cache", lambda key: None)
     monkeypatch.setattr(product_route, "set_cache", lambda key, value, ttl=120: None)
     
@@ -184,4 +184,87 @@ def test_get_products_sorting(admin_client, db_session, monkeypatch):
     
     assert [product["name"] for product in products_desc] == [
         "Monitor", "Keyboard", "Mouse"
+    ]
+    
+def test_get_all_product_invalid_sort_column(admin_client):
+    response = admin_client.get("/products/?sort_by=unknown&order=asc")
+    
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid sort column"
+    
+def test_get_all_product_invalid_sort_order(admin_client):
+    response = admin_client.get("/products/?sort_by=id&order=unknown")
+    
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid sort order"
+    
+def test_get_all_product_filter_by_name(admin_client, db_session, monkeypatch):
+    monkeypatch.setattr(product_route, "get_cache", lambda key: None)
+    monkeypatch.setattr(product_route, "set_cache", lambda *args, **kwargs: None)
+    
+    products = [
+        Product(name="Cloudx Headset", price=120, stock=11),
+        Product(name="Cloudx Mousepad", price=30, stock=11),
+        Product(name="Gaming Keyboard", price=500, stock=5),
+    ]
+    
+    db_session.add_all(products)
+    db_session.commit()
+    
+    response = admin_client.get("/products/?search=Cloudx")
+    assert response.status_code == 200
+    result = response.json()
+    
+    assert len(result) == 2
+    assert all("Cloudx" in product["name"] for product in result)
+    
+def test_get_all_product_filter_case_insensitive(admin_client, db_session, monkeypatch):
+    monkeypatch.setattr(product_route, "get_cache", lambda key: None)
+    monkeypatch.setattr(product_route, "set_cache", lambda *args, **kwargs: None)
+    
+    db_session.add(Product(name="Cloudx Headset", price=120, stock=11))
+    db_session.commit()
+    
+    response = admin_client.get("/products/?search=cloudx")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["name"] == "Cloudx Headset"
+    
+def test_get_product_filter_not_found(admin_client, db_session, monkeypatch):
+    monkeypatch.setattr(product_route, "get_cache", lambda key: None)
+    monkeypatch.setattr(product_route, "set_cache", lambda *args, **kwargs: None)
+    
+    db_session.add(Product(name="Cloudx Headset", price=120, stock=11))
+    db_session.commit()
+    
+    response = admin_client.get("/products/?search=samsung")
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+    
+def test_get_all_product_combined_features(admin_client, db_session, monkeypatch):
+    monkeypatch.setattr(product_route, "get_cache", lambda key: None)
+    monkeypatch.setattr(product_route, "set_cache", lambda *args, **kwargs: None)
+    
+    products = [
+        Product(name="Cloudx Headset", price=120, stock=11),
+        Product(name="Cloudx Mousepad", price=30, stock=11),
+        Product(name="Cloudx Keyboard", price=80, stock=5),
+        Product(name="Gaming Mouse", price=50, stock=10),
+        Product(name="Cloudx Monitor", price=500, stock=2),
+    ]
+    
+    db_session.add_all(products)
+    db_session.commit()
+    
+    response = admin_client.get("/products/?search=Cloudx&sort_by=price&order=asc&skip=0&limit=2")
+    assert response.status_code == 200
+    
+    result = response.json()
+    
+    assert len(result) == 2
+    assert [product["name"] for product in result] == [
+        "Cloudx Mousepad", "Cloudx Keyboard"
+    ]
+    assert [product["price"] for product in result] == [
+        "30.00", "80.00"
     ]

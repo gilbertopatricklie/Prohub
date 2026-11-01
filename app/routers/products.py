@@ -18,7 +18,8 @@ router = APIRouter(
 @router.get("/", response_model= list[ProductResponse])
 def get_all_product(db: Session = Depends(get_db), skip: int = Query(default=0, ge=0),
                     limit: int = Query(default=10, ge=1, le=100),
-                    sort_by: str = Query(default="id"), order: str = Query(default="asc")):
+                    sort_by: str = Query(default="id"), order: str = Query(default="asc"),
+                    search: str | None = Query(default=None, min_length=1, max_length=100)):
     
     allowed_sort_columns = {
         "id": Product.id,
@@ -45,6 +46,7 @@ def get_all_product(db: Session = Depends(get_db), skip: int = Query(default=0, 
         f"limit:{limit}:"
         f"sort:{sort_by}:"
         f"order:{order}:"
+        f"search:{search or ''}"
     )
     cached_products = get_cache(cache_key)
     
@@ -52,7 +54,12 @@ def get_all_product(db: Session = Depends(get_db), skip: int = Query(default=0, 
     if cached_products:
         return json.loads(cached_products)
     #kalo ga ada di cache, ambil dari database
-    statement = select(Product).order_by(sort_column).offset(skip).limit(limit)
+    
+    statement = select(Product)
+    if search:
+        statement = statement.where(Product.name.ilike(f"%{search}%"))
+        
+    statement = statement.order_by(sort_column).offset(skip).limit(limit)
     products = db.scalars(statement).all()
     
     products_data = [
