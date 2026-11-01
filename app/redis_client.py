@@ -39,3 +39,13 @@ def delete_cache(*keys: str):
         redis_client.delete(*keys)
     except RedisError:
         logger.exception("Redis DEL gagal: %s", keys)
+        
+def delete_cache_pattern(pattern: str):
+    try:
+        keys = redis_client.scan_iter(match=pattern)
+        
+        for key in keys:
+            redis_client.delete(key)
+    
+    except RedisError:
+        logger.exception("Redis DEL pattern gagal: %s", pattern)

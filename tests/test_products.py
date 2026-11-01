@@ -4,6 +4,7 @@ from app.main import app
 from app.dependencies import get_current_user, require_admin
 from app.models import Product
 from app.redis_client import delete_cache
+from app.routers import products as product_route
 
 def create_fake_admin():
     return SimpleNamespace(
@@ -153,3 +154,34 @@ def test_get_all_products_pagination(admin_client: TestClient, db_session):
         "products:skip:0:limit:5",
         "products:skip:5:limit:5",
     )
+    
+def test_get_products_sorting(admin_client, db_session, monkeypatch):
+    monkeypatch.setattr(product_route, "get_cache", lambda key: None)
+    monkeypatch.setattr(product_route, "set_cache", lambda key, value, ttl=120: None)
+    
+    products = [
+        Product(name="Keyboard", price=500, stock=10),
+        Product(name="Mouse", price=150, stock=20),
+        Product(name="Monitor", price=2000, stock=5),
+    ]
+    
+    db_session.add_all(products)
+    db_session.commit()
+    
+    response_asc = admin_client.get("/products/?sort_by=price&order=asc")
+    assert response_asc.status_code == 200
+    
+    products_asc = response_asc.json()
+    
+    assert [product["name"] for product in products_asc] == [
+        "Mouse", "Keyboard", "Monitor"
+    ]
+    
+    response_desc = admin_client.get("/products/?sort_by=price&order=desc")
+    assert response_desc.status_code == 200
+    
+    products_desc = response_desc.json()
+    
+    assert [product["name"] for product in products_desc] == [
+        "Monitor", "Keyboard", "Mouse"
+    ]

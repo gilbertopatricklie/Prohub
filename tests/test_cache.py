@@ -1,7 +1,7 @@
 import redis
 import json
 
-from app.redis_client import redis_client, get_cache, set_cache, delete_cache
+from app.redis_client import redis_client, get_cache, set_cache, delete_cache, delete_cache_pattern
 from app.routers import products as products_route
 
 def test_get_cache_success(monkeypatch):
@@ -83,6 +83,8 @@ def test_products_cache_hit(admin_client, monkeypatch):
     assert response.json() == cached_data
     
 def test_get_products_cache_miss(admin_client, monkeypatch):
+    cache_key = "products:skip:0:limit:10:sort:id:order:asc:"
+    
     create_response = admin_client.post(
         "/products/",
         json={
@@ -113,11 +115,11 @@ def test_get_products_cache_miss(admin_client, monkeypatch):
     products = response.json()
     
     assert any(product["name"] == "Database Product" for product in products)
-    assert "products:skip:0:limit:10" in saved_cache
+    assert cache_key in saved_cache
     
-    cached_products = json.loads(saved_cache["products:skip:0:limit:10"]["value"])
+    cached_products = json.loads(saved_cache[cache_key]["value"])
     assert any(product["name"] == "Database Product" for product in cached_products)
-    assert saved_cache["products:skip:0:limit:10"]["ttl"] == 120
+    assert saved_cache[cache_key]["ttl"] == 120
     
 def test_update_product_invalidates_cache(admin_client, monkeypatch):
     create_response = admin_client.post(
@@ -132,12 +134,12 @@ def test_update_product_invalidates_cache(admin_client, monkeypatch):
     assert create_response.status_code == 201
     
     product_id = create_response.json()["id"]
-    deleted_keys = []
+    deleted_pattern = []
     
-    def mock_delete_cache(*keys):
-        deleted_keys.extend(keys)
+    def mock_delete_cache_pattern(pattern):
+        deleted_pattern.append(pattern)
         
-    monkeypatch.setattr(products_route, "delete_cache", mock_delete_cache)
+    monkeypatch.setattr(products_route, "delete_cache_pattern", mock_delete_cache_pattern)
     
     response = admin_client.patch(
         f"/products/{product_id}",
@@ -145,8 +147,7 @@ def test_update_product_invalidates_cache(admin_client, monkeypatch):
     )
 
     assert response.status_code == 200
-    assert "products:all" in deleted_keys
-    assert f"products:{product_id}" in deleted_keys
+    assert "products:*" in deleted_pattern
     
 def test_delete_product_invalidates_cache(admin_client, monkeypatch):
     create_response = admin_client.post(
@@ -162,14 +163,13 @@ def test_delete_product_invalidates_cache(admin_client, monkeypatch):
     
     product_id = create_response.json()["id"]
     
-    deleted_keys = []
+    deleted_pattern = []
     
-    def mock_delete_cache(*keys):
-        deleted_keys.extend(keys)
+    def mock_delete_cache_pattern(pattern):
+        deleted_pattern.append(pattern)
         
-    monkeypatch.setattr(products_route, "delete_cache", mock_delete_cache)
+    monkeypatch.setattr(products_route, "delete_cache_pattern", mock_delete_cache_pattern)
     
     response = admin_client.delete(f"/products/{product_id}")
     assert response.status_code == 204
-    assert "products:all" in deleted_keys
-    assert f"products:{product_id}" in deleted_keys
+    assert "products:*" in deleted_pattern

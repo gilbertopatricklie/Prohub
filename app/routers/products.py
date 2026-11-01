@@ -1,6 +1,6 @@
 import json
 
-from app.redis_client import get_cache, set_cache, delete_cache
+from app.redis_client import get_cache, set_cache, delete_cache, delete_cache_pattern
 from fastapi import APIRouter, status, HTTPException, Depends, Query
 from app.schemas import ProductCreation, ProductResponse, ProductUpdate
 from sqlalchemy import select
@@ -16,15 +16,43 @@ router = APIRouter(
 
 #yang ini response_model = list[ProductResponse] karna yang direturn itu list (banyak item produk)
 @router.get("/", response_model= list[ProductResponse])
-def get_all_product(db: Session = Depends(get_db), skip: int = Query(default=0, ge=0), limit: int = Query(default=10, ge=1, le=100)):
-    cache_key = f"products:skip:{skip}:limit:{limit}"
+def get_all_product(db: Session = Depends(get_db), skip: int = Query(default=0, ge=0),
+                    limit: int = Query(default=10, ge=1, le=100),
+                    sort_by: str = Query(default="id"), order: str = Query(default="asc")):
+    
+    allowed_sort_columns = {
+        "id": Product.id,
+        "name": Product.name,
+        "price": Product.price,
+        "created_at": Product.created_at
+    }
+    
+    if sort_by not in allowed_sort_columns:
+        raise HTTPException(status_code=400, detail="Invalid sort column")
+    
+    if order not in ["asc", "desc"]:
+        raise HTTPException(status_code=400, detail="Invalid sort order")
+    
+    sort_column = allowed_sort_columns[sort_by]
+    
+    if order == "asc":
+        sort_column = sort_column.asc()
+    else:
+        sort_column = sort_column.desc()
+    
+    cache_key = (
+        f"products:skip:{skip}:"
+        f"limit:{limit}:"
+        f"sort:{sort_by}:"
+        f"order:{order}:"
+    )
     cached_products = get_cache(cache_key)
     
     #kalo ada cachenya pake dari redis
     if cached_products:
         return json.loads(cached_products)
     #kalo ga ada di cache, ambil dari database
-    statement = select(Product).order_by(Product.id).offset(skip).limit(limit)
+    statement = select(Product).order_by(sort_column).offset(skip).limit(limit)
     products = db.scalars(statement).all()
     
     products_data = [
@@ -76,7 +104,8 @@ def get_product_by_id(product_id: int, db: Session = Depends(get_db)):
     return product_data
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_product(payload: ProductCreation, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def create_product(payload: ProductCreation, db: Session = Depends(get_db),
+                   current_user: User = Depends(require_admin)):
     new_product = Product(
         name = payload.name,
         price = payload.price,
@@ -87,12 +116,13 @@ def create_product(payload: ProductCreation, db: Session = Depends(get_db), curr
     db.commit()
     db.refresh(new_product)
     
-    delete_cache("products:all")
+    delete_cache_pattern("products:*")
     
     return new_product
 
 @router.patch("/{product_id}", response_model=ProductResponse)
-def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def update_product_by_id(product_id: int, payload: ProductUpdate,
+                         db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     statement = select(Product).where(Product.id == product_id)
     product = db.scalars(statement).first()
     
@@ -106,12 +136,13 @@ def update_product_by_id(product_id: int, payload: ProductUpdate, db: Session = 
         
     db.commit()
     db.refresh(product)
-    delete_cache("products:all", f"products:{product_id}")
+    delete_cache_pattern("products:*")
     
     return product
 
 @router.delete("/{product_id}", status_code= status.HTTP_204_NO_CONTENT)
-def delete_product_by_id(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_product_by_id(product_id: int, db: Session = Depends(get_db),
+                         current_user: User = Depends(require_admin)):
     statement = select(Product).where(Product.id == product_id)
     product = db.scalars(statement).first()
     
@@ -120,6 +151,6 @@ def delete_product_by_id(product_id: int, db: Session = Depends(get_db), current
     
     db.delete(product)
     db.commit()
-    delete_cache("products:all", f"products:{product_id}")
+    delete_cache_pattern("products:*")
     
     return None
